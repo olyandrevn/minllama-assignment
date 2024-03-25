@@ -1,6 +1,7 @@
 from typing import Callable, Iterable, Tuple
 
 import torch
+import numpy as np
 from torch.optim import Optimizer
 
 
@@ -35,26 +36,42 @@ class AdamW(Optimizer):
                 if p.grad is None:
                     continue
                 grad = p.grad.data
+
                 if grad.is_sparse:
                     raise RuntimeError("Adam does not support sparse gradients, please consider SparseAdam instead")
 
-                raise NotImplementedError()
+                # raise NotImplementedError()
 
                 # State should be stored in this dictionary
                 state = self.state[p]
+                if not state:
+                    state['t'] = 0
+                    state['m_t'] = torch.zeros_like(p.data) # momentum 1
+                    state['v_t'] = torch.zeros_like(p.data) # momentum 2
+                    state['alpha_t'] = group['lr']
+                    
 
                 # Access hyperparameters from the `group` dictionary
                 alpha = group["lr"]
+                beta1, beta2 = group['betas']
+                eps = group['eps']
+                weight_decay = group['weight_decay']
 
                 # Update first and second moments of the gradients
+                state['t'] += 1
+                state['m_t'] = beta1 * state['m_t'] + (1 - beta1) * grad
+                state['v_t'] = beta2 * state['v_t'] + (1 - beta2) * grad * grad
 
                 # Bias correction
                 # Please note that we are using the "efficient version" given in
                 # https://arxiv.org/abs/1412.6980
+                state['alpha_t'] = alpha * np.sqrt(1 - beta2 ** state['t']) / (1 - beta1 ** state['t'])
 
                 # Update parameters
+                p.data = p.data - state['alpha_t'] * state['m_t'] / (torch.sqrt(state['v_t']) + eps)
 
                 # Add weight decay after the main gradient-based updates.
                 # Please note that the learning rate should be incorporated into this update.
+                p.data = p.data - weight_decay * alpha * p.data
 
         return loss

@@ -43,8 +43,11 @@ class RMSNorm(torch.nn.Module):
         Returns:
             torch.Tensor: The normalized tensor.
         """
-        # todo
-        raise NotImplementedError
+        # TODO
+        # raise NotImplementedError
+        rms = torch.sqrt(torch.mean(torch.pow(x, 2), dim=-1, keepdim=True) + self.eps)
+        return x / rms
+
 
     def forward(self, x):
         """
@@ -93,8 +96,12 @@ class Attention(nn.Module):
         Make sure to use attention_dropout (self.attn_dropout) on the computed
         attention matrix before applying it to the value tensor.
         '''
-        # todo
-        raise NotImplementedError
+        # TODO
+        # raise NotImplementedError
+        attn_weights = F.softmax(query @ key.transpose(-1, -2) / math.sqrt(self.head_dim), dim=-1)
+        attn_weights = self.attn_dropout(attn_weights)
+        return attn_weights @ value
+
 
     def forward(
         self,
@@ -196,8 +203,17 @@ class LlamaLayer(nn.Module):
         5) add a residual connection from the unnormalized self-attention output to the
            output of the feed-forward network
         '''
-        # todo
-        raise NotImplementedError
+        # TODO
+        # raise NotImplementedError
+        hidden_attn = self.attention_norm(x)
+        hidden_attn = self.attention(hidden_attn)
+        hidden_attn = x + hidden_attn
+
+        hidden_ffn = self.ffn_norm(hidden_attn)
+        hidden_ffn = self.feed_forward(hidden_ffn)
+        output = hidden_attn + hidden_ffn
+        return output
+
 
 class Llama(LlamaPreTrainedModel):
     def __init__(self, config: LlamaConfig):
@@ -273,23 +289,24 @@ class Llama(LlamaPreTrainedModel):
             # forward the model to get the logits for the index in the sequence
             logits, _ = self(idx_cond)
             logits = logits[:, -1, :] # crop to just the final time step
-            # todo
-            raise NotImplementedError
+            # TODO
+            #raise NotImplementedError
 
             if temperature == 0.0:
                 # select the single most likely index
-                idx_next = None
+                idx_next = torch.argmax(logits, dim=-1, keepdim=True)
             else:
                 '''
                 Perform temperature sampling:
-                1) identify  the logits at the final step.
+                1) identify the logits at the final step.
                 2) scale (divide) these probabilities by the given temperature.
                 3) normalize the scaled logits with a softmax to obtain scaled probabilities.
                 4) sample from the scaled probability distribution.
 
                 Note that we are not using top-k sampling/nucleus sampling in this procedure.
                 '''
-                idx_next = None
+                p = F.softmax(logits / temperature, dim=-1)
+                idx_next = p.multinomial(num_samples=1)
             # append sampled index to the running sequence and continue
             idx = torch.cat((idx, idx_next), dim=1)
 
